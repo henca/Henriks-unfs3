@@ -54,6 +54,10 @@ jobs:
           mkdir build
           cd build
           ../configure --prefix=/usr
+      - name: DEBUG
+        run: echo | gcc -dM -E -
+      - name: DEBUG
+        run: echo '#include <winsock2.h>' | gcc -E -
       - name: Build
         working-directory: build
         run: make
