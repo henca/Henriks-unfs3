@@ -19,7 +19,7 @@
 #include <arpa/inet.h>
 #include <syslog.h>
 #else				       /* WIN32 */
-#include <winsock.h>
+#include <winsock2.h>
 #endif				       /* WIN32 */
 
 #include <fcntl.h>
@@ -677,6 +677,31 @@ static void mountprog_3(struct svc_req *rqstp, register SVCXPRT * transp)
     return;
 }
 
+static int socket_domain(int sock)
+{
+#if defined(SO_DOMAIN)
+    int domain;
+    socklen_t len;
+
+    len = sizeof(domain);
+    if (getsockopt(sock, SOL_SOCKET, SO_DOMAIN, &domain, &len))
+	return -1;
+
+    return domain;
+#elif defined(SO_PROTOCOL_INFO)
+    WSAPROTOCOL_INFO info;
+    socklen_t len;
+
+    len = sizeof(info);
+    if (getsockopt(sock, SOL_SOCKET, SO_PROTOCOL_INFO, &info, &len))
+	return -1;
+
+    return info.iAddressFamily;
+#else
+#error No method to get socket domain
+#endif
+}
+
 static void _register_service(SVCXPRT *transp,
 			      const rpcprog_t prognum,
 			      const char *progname,
@@ -722,9 +747,9 @@ static void _register_service(SVCXPRT *transp,
     if (nconf == NULL)
 	return;
 
-    len = sizeof(domain);
-    if (getsockopt(transp->xp_fd, SOL_SOCKET, SO_DOMAIN, &domain, &len)) {
-	perror("getsockopt");
+    domain = socket_domain(transp->xp_fd);
+    if (domain == -1) {
+	perror("socket_domain");
 	fprintf(stderr, "unable to register (%s, %s).\n",
 		progname, versname);
 	daemon_exit(0);
@@ -815,7 +840,6 @@ static SVCXPRT *create_udp_transport(unsigned int port)
     }
 
     int domain;
-    socklen_t len;
     const int on = 1;
 
     const struct sockaddr *sin;
@@ -823,9 +847,9 @@ static SVCXPRT *create_udp_transport(unsigned int port)
     struct sockaddr_in sin4;
     struct sockaddr_in6 sin6;
 
-    len = sizeof(domain);
-    if (getsockopt(sock, SOL_SOCKET, SO_DOMAIN, &domain, &len)) {
-	perror("getsockopt");
+    domain = socket_domain(sock);
+    if (domain == -1) {
+	perror("socket_domain");
 	fprintf(stderr, "Couldn't create a listening udp socket\n");
 	exit(1);
     }
@@ -895,7 +919,6 @@ static SVCXPRT *create_tcp_transport(unsigned int port)
     }
 
     int domain;
-    socklen_t len;
     const int on = 1;
 
     const struct sockaddr *sin;
@@ -903,9 +926,9 @@ static SVCXPRT *create_tcp_transport(unsigned int port)
     struct sockaddr_in sin4;
     struct sockaddr_in6 sin6;
 
-    len = sizeof(domain);
-    if (getsockopt(sock, SOL_SOCKET, SO_DOMAIN, &domain, &len)) {
-	perror("getsockopt");
+    domain = socket_domain(sock);
+    if (domain == -1) {
+	perror("socket_domain");
 	fprintf(stderr, "Couldn't create a listening tcp socket\n");
 	exit(1);
     }
